@@ -60,7 +60,7 @@
     }
     button { font: inherit; }
     button, [tabindex="-1"] { scroll-margin-block: 24px; }
-    button:focus-visible, [tabindex="-1"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+    button:focus-visible, [tabindex="-1"]:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
     button:focus-visible { box-shadow: 0 0 0 2px var(--surface); }
     h2:focus-visible { border-radius: 4px; }
     .shell { max-width: 568px; margin: auto; padding: 34px 24px 24px; }
@@ -148,6 +148,17 @@
     .result-score small { font-size: 23px; color: var(--muted); font-weight: 400; letter-spacing: -1px; }
     .result-caption { color: var(--muted); margin: 3px 0 26px; font-size: 12px; }
     .results .primary { min-width: 185px; }
+    .missed-review { margin: 0 0 22px; border: 1px solid var(--border); border-radius: 10px; background: var(--option); text-align: left; }
+    .missed-review summary { padding: 12px 14px; color: var(--accent); font-weight: 700; cursor: pointer; }
+    .missed-review[open] summary { border-bottom: 1px solid var(--border); }
+    .missed-answer-list { display: grid; gap: 0; margin: 0; padding: 0 16px 8px 36px; }
+    .missed-answer-list li { padding: 14px 0; overflow-wrap: anywhere; }
+    .missed-answer-list li + li { border-top: 1px solid var(--border); }
+    .missed-answer-list h3 { margin: 0 0 9px; font-size: 15px; line-height: 1.4; }
+    .missed-answer-list p { margin: 4px 0; color: var(--muted); font-size: 12px; }
+    .missed-answer-list p strong { color: var(--text); }
+    .missed-answer-list .review-fact { margin-top: 9px; }
+    .no-missed-answers { margin: 0 0 22px; color: var(--green); font-size: 13px; font-weight: 600; }
     .enter { animation: arrive .35s ease; }
     @keyframes confetti-burst {
       0% { opacity: 0; transform: translateY(-70px) rotate(0deg); }
@@ -264,6 +275,11 @@
       <p class="result-copy" id="result-copy"></p>
       <div class="result-score"><span id="final-score"></span><small> / 10</small></div>
       <p class="result-caption">correct answers · <span id="accuracy"></span>% accuracy</p>
+      <details class="missed-review" id="missed-review" hidden>
+        <summary id="missed-review-summary"></summary>
+        <ol class="missed-answer-list" id="missed-answer-list"></ol>
+      </details>
+      <p class="no-missed-answers" id="no-missed-answers" hidden>No missed answers. You answered every question correctly!</p>
       <button class="primary" id="restart">Explore again <span class="arrow" aria-hidden="true">&rarr;</span></button>
     </section>
     <p class="footnote">A little curiosity goes a long way.<span aria-hidden="true">&#10022;</span>Keep exploring.</p>
@@ -348,6 +364,7 @@
     let current = 0;
     let score = 0;
     let answered = false;
+    let missedAnswers = [];
 
     function updateProgress(completed) {
       byId("progress").value = completed;
@@ -393,6 +410,7 @@
       const item = questions[current];
       const correct = selected === item.correct;
       if (correct) score++;
+      else missedAnswers.push({ questionIndex: current, selected });
       Array.from(byId("answers").children).forEach((button, index) => {
         button.disabled = true;
         if (index === item.correct || index === selected) {
@@ -417,6 +435,37 @@
 
     function showResults() {
       byId("quiz").hidden = true;
+      const review = byId("missed-review");
+      const noMissedAnswers = byId("no-missed-answers");
+      review.hidden = missedAnswers.length === 0;
+      noMissedAnswers.hidden = missedAnswers.length > 0;
+      if (missedAnswers.length > 0) {
+        byId("missed-review-summary").textContent = `Review missed answers (${missedAnswers.length})`;
+        const list = byId("missed-answer-list");
+        list.replaceChildren();
+        missedAnswers.forEach(({ questionIndex, selected }) => {
+          const item = questions[questionIndex];
+          const entry = document.createElement("li");
+          const question = document.createElement("h3");
+          question.textContent = item.question;
+          entry.append(question);
+          [
+            ["Your answer:", item.answers[selected]],
+            ["Correct answer:", item.answers[item.correct]]
+          ].forEach(([label, answer]) => {
+            const line = document.createElement("p");
+            const strong = document.createElement("strong");
+            strong.textContent = `${label} `;
+            line.append(strong, document.createTextNode(answer));
+            entry.append(line);
+          });
+          const fact = document.createElement("p");
+          fact.className = "review-fact";
+          fact.textContent = item.fact;
+          entry.append(fact);
+          list.append(entry);
+        });
+      }
       const celebrating = score >= 8;
       byId("results").classList.toggle("celebration", celebrating);
       byId("result-status").textContent = score === 10 ? "Perfect mission" : celebrating ? "Mission distinction" : "Mission complete";
@@ -459,6 +508,12 @@
     byId("restart").addEventListener("click", () => {
       current = 0;
       score = 0;
+      missedAnswers = [];
+      byId("missed-review").hidden = true;
+      byId("missed-review").open = false;
+      byId("missed-review-summary").textContent = "";
+      byId("missed-answer-list").replaceChildren();
+      byId("no-missed-answers").hidden = true;
       byId("results").hidden = true;
       byId("results").classList.remove("celebration");
       byId("confetti").replaceChildren();
